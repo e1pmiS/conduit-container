@@ -1,4 +1,4 @@
-# Conduit Container — README
+# Conduit Container 
 
 Monorepo with two Git submodules:
 - **backend/**: Django REST API (Django 1.10, SQLite)
