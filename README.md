@@ -98,8 +98,8 @@ Notes:
 1- Clone and pull submodules
 
 ```bash
-git clone <your-main-repo>
-cd <your-main-repo>
+git clone https://github.com/e1pmiS/conduit-container.git
+cd conduit-container
 git submodule update --init --recursive
 ```
 
