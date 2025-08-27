@@ -1,0 +1,25 @@
+services:
+  backend:
+    container_name: conduit-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/db.sqlite3:/app/db.sqlite3
+    restart: unless-stopped
+
+  frontend:
+    container_name: conduit-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8282:4200"
+    volumes:
+      - ./frontend/proxy.compose.json:/app/proxy.compose.json:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
