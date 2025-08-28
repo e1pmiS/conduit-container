@@ -20,7 +20,7 @@
 ## Table of Content
 - [Conduit Container](conduit-container)
   - [Table of Contents](#table-of-contents)
-  - [Prerequisits](#prerequisits)
+  - [Prerequisites](#prerequisites)
   - [Quickstart](#quickstart)
   - [Environment Variables](#environment-variables)
   - [Features](#features)
@@ -36,7 +36,7 @@
 
 ---
 
-## Prerequisits
+## Prerequisites
 - Docker Engine 24+
 - Docker Compose v2
   
