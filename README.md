@@ -13,7 +13,7 @@ Orchestration via **Docker Compose**.
   - [Table of Contents](#table-of-contents)
   - [Description](#description)
   - [Features](#features)
-  - [Prerequisits](#prerequisits)
+  - [Prerequisites](#prerequisites)
   - [Environment Variables](#environment-variables)
   - [Quickstart](#quickstart)
   - [Usage](#usage)
