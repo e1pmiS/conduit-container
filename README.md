@@ -138,7 +138,7 @@ docker compose exec backend python manage.py shell
 - Database path comes from env/compose (/data/db.sqlite3) and lives in the dbdata named volume.
 
 ### Frontend behavior
-- `frontend/Dockerfile.dev` builds the Angular app for production.
+- `frontend/Dockerfile` builds the Angular app for production.
 - `frontend/nginx.conf` serves the SPA and proxies /api/* to backend:8000.
 
 ---
