@@ -1,21 +1,29 @@
-# Conduit Container 
+# Conduit Container
 
-Monorepo with two Git submodules:
-- **backend/**: Django REST API (Django 1.10, SQLite)
-- **frontend/**: Angular client (Angular CLI dev server)
+**Goal:** provide a self-contained, reproducible environment to run the **Conduit (RealWorld)** app end-to-end locally or on a VM. The repo standardizes setup, hides legacy toolchains, and lets you start building or testing immediately.
 
-Orchestration via **Docker Compose**.
+**backend/** — Django REST API (production)
+- Implements the RealWorld API spec: user registration and login (JWT), profiles and follow/unfollow, articles CRUD, comments, favorites, and tag discovery.
+- Tech stack: Django 1.10, Django REST Framework, PyJWT, SQLite, Gunicorn, WhiteNoise.
+- Startup behavior: on container start it **applies migrations**, **collects static**, and **creates a superuser only if missing** from `.env` (no password overwrite).
+- Persistence: SQLite stored in a **named volume** (Compose volume `dbdata`, mounted at `/data/db.sqlite3`).
+- External interface: HTTP on **8000**; endpoints under `/api/*` (e.g., `/api/users/login`, `/api/articles`, `/api/tags`).
+
+**frontend/** — Angular Single-Page App (production)
+- Implements the RealWorld UI: home feed, global feed, tags, article page, editor, auth pages, profile, favorites, settings.
+- Built with Angular CLI, **served by Nginx**. Nginx **proxies `/api/*` to the backend** service to avoid CORS.
+- External interface: container listens on **80**, mapped to host **8282** by Compose.
+
 
 ---
 
-## Table of Contents
-- [Conduit Container — README](#conduit-container--readme)
+## Table of Content
+- [Conduit Container](conduit-container)
   - [Table of Contents](#table-of-contents)
-  - [Description](#description)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-  - [Environment Variables](#environment-variables)
+  - [Prerequisits](#prerequisits)
   - [Quickstart](#quickstart)
+  - [Environment Variables](#environment-variables)
+  - [Features](#features)
   - [Usage](#usage)
     - [Common Compose commands](#common-compose-commands)
     - [Backend behavior](#backend-behavior)
@@ -28,37 +36,53 @@ Orchestration via **Docker Compose**.
 
 ---
 
-## Description
+## Prerequisits
+- Docker Engine 24+
+- Docker Compose v2
+  
+---
 
-**Goal:** provide a self-contained, reproducible environment to run the **Conduit (RealWorld)** app end‑to‑end on locally or in cloud. The repo standardizes setup, hides legacy toolchains, and lets you start building or testing immediately.
+## Quickstart
 
-**backend/** — Django REST API
-- Implements the RealWorld API spec: user registration and login (JWT), profiles and follow/unfollow, articles CRUD, comments, favorites, and tag discovery.
-- Tech stack: Django 1.10, Django REST Framework, PyJWT, SQLite.
-- Startup behavior: on container start, it **applies migrations** and **creates/updates a superuser** from `.env`.
-- Persistence: SQLite file bind-mounted from the host for simple, zero‑ops storage.
-- External interface: exposes HTTP on port **8000**; all endpoints are under `/api/*` (e.g., `/api/users/login`, `/api/articles`, `/api/tags`).
+1- Clone and pull submodules
 
-**frontend/** — Angular Single‑Page App
-- Implements the RealWorld UI: home feed, global feed, tag filtering, article page, editor, auth pages, profile, favorites, and settings.
-- Tech stack: Angular CLI dev server for development; the app calls the API through **same‑origin `/api/*`** paths.
-- Proxy: the dev server proxies `/api` to the backend service, removing CORS complexity.
-- External interface: serves the SPA on container port **4200** (mapped to **8282** by Compose).
+```bash
+git clone https://github.com/e1pmiS/conduit-container.git
+cd conduit-container
+git submodule update --init --recursive
+```
+
+2- Prepare env
+edit .env and set DJANGO_SECRET_KEY and other values
+
+```bash
+cp example.env .env
+```
+
+3- Build and start
+```bash
+docker compose up -d --build
+```
+
+4- Verify
+```bash
+docker compose ps
+docker compose logs --tail=50 backend
+docker compose logs --tail=50 frontend
+```
+
+Open locally:
+- **Web app:** http://127.0.0.1:8282
+- **API:** http://127.0.0.1:8000/api/tags/
 
 ---
 
 ## Features
-- One‑command startup with Docker Compose.
-- Automatic DB migrations on backend start.
-- Automatic bootstrap of a Django superuser from `.env`.
-- Angular dev server with live rebuild and API proxy.
-- SQLite persistence via bind mount (`backend/db.sqlite3`).
-
----
-
-## Prerequisits
-- Docker Engine 24+
-- Docker Compose v2
+- One-command startup with Docker Compose.
+- Production backend via Gunicorn and WhiteNoise.
+- Automatic DB migrations and static collection on start.
+- Named volume for SQLite persistence.
+- Production Angular build served by Nginx, /api/* proxied to backend.
 
 ---
 
@@ -93,48 +117,6 @@ Notes:
 
 ---
 
-## Quickstart
-
-1- Clone and pull submodules
-
-```bash
-git clone https://github.com/e1pmiS/conduit-container.git
-cd conduit-container
-git submodule update --init --recursive
-```
-
-2- Prepare env
-edit .env and set DJANGO_SECRET_KEY and other values
-
-```bash
-cp example.env .env
-```
-
- 3- Prepare SQLite file (avoid a directory bind)
-
-```bash
-touch backend/db.sqlite3
-chmod 666 backend/db.sqlite3
-```
-
-4- Build and start
-```bash
-docker compose up -d --build
-```
-
-5- Verify
-```bash
-docker compose ps
-docker compose logs --tail=50 backend
-docker compose logs --tail=50 frontend
-```
-
-Open locally:
-- **Web app:** http://127.0.0.1:8282
-- **API:** http://127.0.0.1:8000/api/tags/
-
----
-
 ## Usage
 
 ### Common Compose commands
@@ -153,11 +135,11 @@ docker compose exec backend python manage.py shell
 
 ### Backend behavior
 - `backend/entrypoint.sh` runs `migrate` and ensures a superuser from `.env` every start.
-- Data persists via bind mount: `./backend/db.sqlite3:/app/db.sqlite3`.
+- Database path comes from env/compose (/data/db.sqlite3) and lives in the dbdata named volume.
 
 ### Frontend behavior
-- `frontend/Dockerfile.dev` serves the Angular app on container port **4200**.
-- `frontend/proxy.compose.json` proxies `/api` to `http://backend:8000` so the browser uses same‑origin `/api/*`.
+- `frontend/Dockerfile.dev` builds the Angular app for production.
+- `frontend/nginx.conf` serves the SPA and proxies /api/* to backend:8000.
 
 ---
 
@@ -166,13 +148,14 @@ docker compose exec backend python manage.py shell
 ### backend
 - **Build context:** `./backend`
 - **Exposes:** `8000/tcp` (mapped to host `8000` by Compose)
-- **Responsibilities:** Run Django, apply migrations, create/update admin user from `.env`.
-- **Persistence:** `./backend/db.sqlite3` bind‑mounted to `/app/db.sqlite3`.
+- **Responsibilities:** Run Django via Gunicorn, apply migrations, collect static, bootstrap admin if needed.
+- **volumes:**  Named volume dbdata mounted at /data (SQLite at /data/db.sqlite3).
 
 ### frontend
 - **Build context:** `./frontend`
-- **Exposes:** `4200/tcp` (mapped to host `8282` by Compose)
-- **Responsibilities:** Serve Angular SPA with live reload and API proxy to backend.
+- **Exposes:** 80/tcp (mapped to host 8282)
+- **Responsibilities:** Serve Angular SPA via Nginx and proxy /api/* to backend.
+- **volumes:** frontend_cache for /var/cache/nginx.
 
 ---
 
