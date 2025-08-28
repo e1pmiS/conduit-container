@@ -17,12 +17,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8282:4200"
+      - "8282:80"
     volumes:
-      - ./frontend/proxy.compose.json:/app/proxy.compose.json:ro
+      - frontend_cache:/var/cache/nginx
     depends_on:
       - backend
     restart: unless-stopped
 
 volumes:
   dbdata:
+  frontend_cache:
