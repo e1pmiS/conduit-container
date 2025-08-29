@@ -2,7 +2,7 @@ name: build-and-push
 
 on:
   push:
-    branches: [ feature-automation ]   # set to your branch name
+    branches: [ feature-automation-workflow ]   # set to your branch name
     paths:
       - 'backend/**'
       - 'frontend/**'

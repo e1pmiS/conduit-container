@@ -1,0 +1,84 @@
+name: deploy
+
+on:
+  push:
+    branches: [ feature-automation-workflow ]
+    paths:
+      - '.github/workflows/deploy.yml'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve image tags
+        id: meta
+        run: |
+          echo "BACK=${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/conduit-backend:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          echo "FRONT=${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/conduit-frontend:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          port: ${{ secrets.VM_PORT }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            set -e
+            mkdir -p "${{ secrets.VM_DEPLOY_DIR }}"
+            cd "${{ secrets.VM_DEPLOY_DIR }}"
+
+            # write backend .env from secret
+            cat > .env <<'ENV'
+            ${{ secrets.BACKEND_ENV }}
+            ENV
+
+            # write docker-compose.yml for prod images
+            cat > docker-compose.yml <<'YML'
+            version: "3.8"
+            services:
+              backend:
+                image: ${{ steps.meta.outputs.BACK }}
+                container_name: conduit-backend
+                env_file: .env
+                environment:
+                  DJANGO_DB_PATH: /data/db.sqlite3
+                ports:
+                  - "8000:8000"
+                volumes:
+                  - dbdata:/data
+                restart: unless-stopped
+
+              frontend:
+                image: ${{ steps.meta.outputs.FRONT }}
+                container_name: conduit-frontend
+                ports:
+                  - "8282:80"
+                depends_on:
+                  - backend
+                restart: unless-stopped
+                volumes:
+                  - frontend_cache:/var/cache/nginx
+
+            volumes:
+              dbdata:
+              frontend_cache:
+            YML
+
+            # login to GHCR and deploy
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
