@@ -16,6 +16,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  OWNER: ${{ secrets.GHCR_USERNAME }}  
 
 jobs:
   deploy:

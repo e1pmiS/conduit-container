@@ -16,9 +16,9 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/conduit-backend
-  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/conduit-frontend
-
+  OWNER: ${{ secrets.GHCR_USERNAME }}  
+  IMAGE_BACKEND: ghcr.io/${{ env.OWNER }}/conduit-backend
+  IMAGE_FRONTEND: ghcr.io/${{ env.OWNER }}/conduit-frontend
 jobs:
   build-push:
     runs-on: ubuntu-latest
