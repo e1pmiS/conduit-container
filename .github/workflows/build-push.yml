@@ -1,0 +1,57 @@
+name: build-and-push
+
+on:
+  push:
+    branches: [ feature-automation ]   # set to your branch name
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/conduit-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/conduit-frontend
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build+push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.IMAGE_BACKEND }}:${{ github.ref_name }}
+
+      - name: Build+push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.IMAGE_FRONTEND }}:${{ github.ref_name }}
+
