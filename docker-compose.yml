@@ -1,0 +1,29 @@
+services:
+  backend:
+    container_name: conduit-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - dbdata:/data
+    restart: unless-stopped
+
+  frontend:
+    container_name: conduit-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8282:80"
+    volumes:
+      - frontend_cache:/var/cache/nginx
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+  frontend_cache:
