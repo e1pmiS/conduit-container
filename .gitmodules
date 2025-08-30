@@ -1,6 +1,8 @@
 [submodule "backend"]
 	path = backend
 	url = https://github.com/e1pmiS/conduit-backend.git
+	branch = master
 [submodule "frontend"]
 	path = frontend
 	url = https://github.com/e1pmiS/conduit-frontend.git
+	branch = master
