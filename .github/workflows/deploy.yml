@@ -46,38 +46,6 @@ jobs:
             ${{ secrets.BACKEND_ENV }}
             ENV
 
-            # write docker-compose.yml for prod images
-            cat > docker-compose.yml <<'YML'
-            version: "3.8"
-            services:
-              backend:
-                image: ${{ steps.meta.outputs.BACK }}
-                container_name: conduit-backend
-                env_file: .env
-                environment:
-                  DJANGO_DB_PATH: /data/db.sqlite3
-                ports:
-                  - "8000:8000"
-                volumes:
-                  - dbdata:/data
-                restart: unless-stopped
-
-              frontend:
-                image: ${{ steps.meta.outputs.FRONT }}
-                container_name: conduit-frontend
-                ports:
-                  - "8282:80"
-                depends_on:
-                  - backend
-                restart: unless-stopped
-                volumes:
-                  - frontend_cache:/var/cache/nginx
-
-            volumes:
-              dbdata:
-              frontend_cache:
-            YML
-
             # login to GHCR and deploy
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             docker compose pull
