@@ -1,0 +1,96 @@
+# .github/workflows/deployment.yml
+name: deployment
+
+on:
+  push:
+    branches: [ feature-automation-workflow ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deployment-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Build + push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:${{ github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:${{ github.ref_name }}-${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy (pull repo, pull images, up, health-check)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          port: ${{ secrets.VM_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            DIR="${{ secrets.VM_DEPLOY_DIR }}"
+            BR="feature-automation-workflow"
+
+            git -C "$DIR" fetch --all --prune
+            git -C "$DIR" checkout "$BR"
+            git -C "$DIR" reset --hard "origin/$BR"
+            git -C "$DIR" submodule update --init --recursive
+            cd "$DIR"
+
+            # login to GHCR if private
+            if [ -n "${{ secrets.GHCR_TOKEN }}" ] && [ -n "${{ secrets.GHCR_USERNAME }}" ]; then
+              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
+            fi
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+
+            sleep 30
+            curl -sSf -m 10 http://127.0.0.1:8000/api/tags/ >/dev/null
+            curl -sSf -I -m 10 http://127.0.0.1:8282/ >/dev/null
+
+            docker compose ps
