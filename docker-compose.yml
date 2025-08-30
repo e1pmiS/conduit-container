@@ -1,27 +1,19 @@
+# docker-compose.yml
 services:
   backend:
+    image: ghcr.io/e1pmis/conduit-backend:master
     container_name: conduit-backend
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
     env_file: .env
-    ports:
-      - "8000:8000"
-    volumes:
-      - dbdata:/data
+    ports: ["8000:8000"]
+    volumes: ["dbdata:/data"]
     restart: unless-stopped
 
   frontend:
+    image: ghcr.io/e1pmis/conduit-frontend:master
     container_name: conduit-frontend
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "8282:80"
-    volumes:
-      - frontend_cache:/var/cache/nginx
-    depends_on:
-      - backend
+    ports: ["8282:80"]
+    depends_on: ["backend"]
+    volumes: ["frontend_cache:/var/cache/nginx"]
     restart: unless-stopped
 
 volumes:
