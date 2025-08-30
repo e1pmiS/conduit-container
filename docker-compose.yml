@@ -1,7 +1,6 @@
-# docker-compose.yml
 services:
   backend:
-    image: ghcr.io/e1pmis/conduit-backend:master
+    image: ghcr.io/e1pmis/conduit-backend:feature-automation-workflow
     container_name: conduit-backend
     env_file: .env
     ports: ["8000:8000"]
@@ -9,7 +8,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/e1pmis/conduit-frontend:master
+    image: ghcr.io/e1pmis/conduit-frontend:feature-automation-workflow
     container_name: conduit-frontend
     ports: ["8282:80"]
     depends_on: ["backend"]
