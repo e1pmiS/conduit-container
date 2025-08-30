@@ -1,35 +1,33 @@
+# .github/workflows/deploy.yml
 name: deploy
-
 on:
+  workflow_dispatch:
   push:
     branches: [ feature-automation-workflow ]
     paths:
-      - '.github/workflows/deploy.yml'
-      - 'backend/**'
-      - 'frontend/**'
       - 'docker-compose.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
 
-env:
-  REGISTRY: ghcr.io
-  OWNER: ${{ secrets.GHCR_USERNAME }}  
-
 jobs:
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve image tags
-        id: meta
-        run: |
-          echo "BACK=${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/conduit-backend:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          echo "FRONT=${REGISTRY}/${GITHUB_REPOSITORY_OWNER}/conduit-frontend:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
 
-      - name: SSH deploy
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          port: ${{ secrets.VM_PORT }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "${{ secrets.VM_DEPLOY_DIR }}/"
+
+      - name: SSH deploy with repo compose
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
@@ -38,16 +36,20 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             set -e
-            mkdir -p "${{ secrets.VM_DEPLOY_DIR }}"
             cd "${{ secrets.VM_DEPLOY_DIR }}"
 
-            # write backend .env from secret
-            cat > .env <<'ENV'
+            # backend .env from secret (skip if you already have .env on the VM)
+            if [ -n "${{ secrets.BACKEND_ENV }}" ]; then
+              cat > .env <<'ENV'
             ${{ secrets.BACKEND_ENV }}
             ENV
+            fi
 
-            # login to GHCR and deploy
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+            # if your compose uses 'image:', login; if it uses 'build:', build locally
+            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
+
+            # run with your repo compose (build if needed)
+            docker compose up -d --build --remove-orphans
+
+            # optional tidy
+            docker image prune -f || true
