@@ -1,11 +1,10 @@
-# .github/workflows/deploy.yml
 name: deploy
 on:
   workflow_dispatch:
   push:
     branches: [ feature-automation-workflow ]
     paths:
-      - 'docker-compose.yml'
+      - '**/*'
 
 permissions:
   contents: read
@@ -15,19 +14,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Copy docker-compose.yml to VM
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          port: ${{ secrets.VM_PORT }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "${{ secrets.VM_DEPLOY_DIR }}/"
-
-      - name: SSH deploy with repo compose
+      - name: SSH deploy (pull existing repo; update submodules)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
@@ -36,20 +23,19 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             set -e
-            cd "${{ secrets.VM_DEPLOY_DIR }}"
+            DIR="${{ secrets.VM_DEPLOY_DIR }}"
+            BR="feature-automation-workflow"
 
-            # backend .env from secret (skip if you already have .env on the VM)
-            if [ -n "${{ secrets.BACKEND_ENV }}" ]; then
-              cat > .env <<'ENV'
-            ${{ secrets.BACKEND_ENV }}
-            ENV
-            fi
+            test -d "$DIR/.git" || { echo "Repo missing at $DIR"; exit 1; }
 
-            # if your compose uses 'image:', login; if it uses 'build:', build locally
+            git -C "$DIR" fetch --all --prune
+            git -C "$DIR" checkout "$BR"
+            git -C "$DIR" reset --hard "origin/$BR"
+            git -C "$DIR" submodule sync --recursive
+            git -C "$DIR" submodule update --init --recursive
+
+            cd "$DIR"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
-
-            # run with your repo compose (build if needed)
+            docker compose pull || true
             docker compose up -d --build --remove-orphans
-
-            # optional tidy
             docker image prune -f || true
