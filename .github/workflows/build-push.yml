@@ -1,10 +1,11 @@
+# .github/workflows/build-push.yml
 name: build-and-push
 on:
   push:
     branches: [ feature-automation-workflow ]
     paths:
-      - 'backend/**'
-      - 'frontend/**'
+      - 'backend'        # submodule pointer change
+      - 'frontend'       # submodule pointer change
       - 'docker-compose.yml'
       - '.github/workflows/**'
   workflow_dispatch:
@@ -21,12 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: true }
+        with:
+          submodules: true    # checkout submodules at the pinned commits
+
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      - name: Compute OWNER (lowercase; fallback to repo owner)
+      - name: Compute OWNER (lowercase; prefer secret GHCR_USERNAME, else repo owner)
         run: |
           OWNER="${{ secrets.GHCR_USERNAME }}"
           if [ -z "$OWNER" ]; then OWNER="${{ github.repository_owner }}"; fi
@@ -39,7 +42,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build + push backend
+      - name: Build + push backend (from submodule ./backend)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -48,7 +51,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}-${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}
 
-      - name: Build + push frontend
+      - name: Build + push frontend (from submodule ./frontend)
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
