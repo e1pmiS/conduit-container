@@ -1,37 +1,41 @@
 # Conduit Container
 
-**Goal:** provide a self-contained, reproducible environment to run the **Conduit (RealWorld)** app end-to-end locally or on a VM. The repo standardizes setup, hides legacy toolchains, and lets you start building or testing immediately.
+**Goal:** run the **Conduit (RealWorld)** app end-to-end locally or on a VM with a reproducible Docker setup and a single CI/CD workflow that builds, publishes, and deploys images.
 
 **backend/** — Django REST API (production)
-- Implements the RealWorld API spec: user registration and login (JWT), profiles and follow/unfollow, articles CRUD, comments, favorites, and tag discovery.
-- Tech stack: Django 1.10, Django REST Framework, PyJWT, SQLite, Gunicorn, WhiteNoise.
-- Startup behavior: on container start it **applies migrations**, **collects static**, and **creates a superuser only if missing** from `.env` (no password overwrite).
-- Persistence: SQLite stored in a **named volume** (Compose volume `dbdata`, mounted at `/data/db.sqlite3`).
-- External interface: HTTP on **8000**; endpoints under `/api/*` (e.g., `/api/users/login`, `/api/articles`, `/api/tags`).
+- RealWorld API: auth (JWT), profiles, follow/unfollow, articles CRUD, comments, favorites, tags.
+- Stack: Django 1.10, DRF, PyJWT, SQLite, Gunicorn, WhiteNoise.
+- Startup: **migrate**, **collectstatic**, **create superuser only if missing** (reads `.env`).
+- Data: SQLite lives in a **named volume** (`dbdata`, mounted at `/data/db.sqlite3`).
+- Port: **8000**, endpoints under `/api/*`.
 
-**frontend/** — Angular Single-Page App (production)
-- Implements the RealWorld UI: home feed, global feed, tags, article page, editor, auth pages, profile, favorites, settings.
-- Built with Angular CLI, **served by Nginx**. Nginx **proxies `/api/*` to the backend** service to avoid CORS.
-- External interface: container listens on **80**, mapped to host **8282** by Compose.
-
+**frontend/** — Angular SPA (production)
+- RealWorld UI: feeds, tags, editor, auth, profile, favorites, settings.
+- Built with Angular CLI, served by **Nginx**.
+- Nginx **proxies `/api/*` to backend** to avoid CORS.
+- Port: container **80** (Compose maps to **8282**).
 
 ---
 
-## Table of Content
-- [Conduit Container](conduit-container)
+## Table of Contents
+- [Conduit Container](#conduit-container)
   - [Table of Contents](#table-of-contents)
   - [Prerequisites](#prerequisites)
   - [Quickstart](#quickstart)
-  - [Environment Variables](#environment-variables)
-  - [Features](#features)
   - [Usage](#usage)
+    - [Features](#features)
+    - [Environment Variables](#environment-variables)
     - [Common Compose commands](#common-compose-commands)
-    - [Backend behavior](#backend-behavior)
-    - [Frontend behavior](#frontend-behavior)
   - [Services](#services)
     - [backend](#backend)
     - [frontend](#frontend)
   - [Networking](#networking)
+  - [CI/CD: deployment workflow](#cicd-deployment-workflow)
+    - [Purpose](#purpose)
+    - [What runs](#what-runs)
+    - [Triggers](#triggers)
+    - [Image names used by Compose](#image-names-used-by-compose)
+    - [Required secrets (repo → Settings → Actions → Secrets)](#required-secrets-repo--settings--actions--secrets)
   - [License](#license)
 
 ---
@@ -59,16 +63,17 @@ edit .env and set DJANGO_SECRET_KEY and other values
 cp example.env .env
 ```
 
-3- Build and start
+3- Start (uses public GHCR images, no build)
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 4- Verify
 ```bash
 docker compose ps
-docker compose logs --tail=50 backend
-docker compose logs --tail=50 frontend
+curl -sSf http://127.0.0.1:8000/api/tags/ >/dev/null && echo "API ok"
+curl -sSfI http://127.0.0.1:8282/        >/dev/null && echo "Web ok"
 ```
 
 Open locally:
@@ -77,20 +82,22 @@ Open locally:
 
 ---
 
-## Features
-- One-command startup with Docker Compose.
-- Production backend via Gunicorn and WhiteNoise.
-- Automatic DB migrations and static collection on start.
-- Named volume for SQLite persistence.
-- Production Angular build served by Nginx, /api/* proxied to backend.
+## Usage
 
----
+### Features
+- **Production images** from GHCR; no local builds required.
+- **Idempotent backend start:** runs migrations, collects static, creates admin only if missing.
+- **SQLite persistence** via named volume (`dbdata` → `/data/db.sqlite3`).
+- **Nginx-served SPA** with `/api/*` proxy to `backend:8000` (no CORS hassle).
+- **Single compose file** for local and VM runs.
+- **Deterministic source** via Git submodules; CI builds from pinned SHAs.
 
-## Environment Variables
+### Environment Variables
 
 Place **`.env`** in the **repo root** (same folder as `docker-compose.yml`). Keep **`example.env`** there as a committed template and **do not commit** your real `.env`.
 
 **example.env**
+
 ```env
 # --- Django settings ---
 DJANGO_SETTINGS_MODULE=conduit.settings
@@ -106,6 +113,7 @@ DJANGO_ADMIN_PASSWORD=ChangeMe123!
 ```
 
 Create your real `.env`:
+
 ```bash
 cp example.env .env
 ```
@@ -115,31 +123,27 @@ Notes:
 - `DJANGO_SECRET_KEY` is required beyond localhost.
 - `DJANGO_ALLOWED_HOSTS` must include your VM IP if you want to host it.
 
----
-
-## Usage
-
 ### Common Compose commands
-```bash
-# start or rebuild a single service
-docker compose up -d --build backend
-docker compose up -d --build frontend
 
-# follow logs
+- Pull published images and start
+```bash
+docker compose pull
+docker compose up -d
+```
+- Restart one service
+```bash
+docker compose up -d backend
+docker compose up -d frontend
+```
+- Logs
+```bash
 docker compose logs -f backend
 docker compose logs -f frontend
-
-# exec into backend
+```
+- Shell into backend
+```bash
 docker compose exec backend python manage.py shell
 ```
-
-### Backend behavior
-- `backend/entrypoint.sh` runs `migrate` and ensures a superuser from `.env` every start.
-- Database path comes from env/compose (/data/db.sqlite3) and lives in the dbdata named volume.
-
-### Frontend behavior
-- `frontend/Dockerfile` builds the Angular app for production.
-- `frontend/nginx.conf` serves the SPA and proxies /api/* to backend:8000.
 
 ---
 
@@ -166,6 +170,56 @@ docker compose exec backend python manage.py shell
 - External access:
   - API → `http://<host-or-vm-ip>:8000`
   - Web → `http://<host-or-vm-ip>:8282`
+
+---
+
+## CI/CD: deployment workflow
+
+A single **deployment** workflow builds images, publishes them to GHCR, then deploys them to the VM with Docker Compose.
+
+### Purpose
+- Build once in CI. Deploy many times on the VM.
+- Make releases traceable by tag and commit SHA.
+
+### What runs
+1) **Build & push**
+   - Checks out this repo **with submodules**.
+   - Builds `./backend` and `./frontend` using their `Dockerfile`s.
+   - Pushes two tags per image to GHCR:
+     - Moving tag: `feature-automation-workflow`
+     - Immutable tag: `feature-automation-workflow-<git-sha>`
+   - No `.env` data is baked into images.
+
+2) **Deploy**
+   - SSH to the VM.
+   - Sync the worktree at `$VM_DEPLOY_DIR` to branch `feature-automation-workflow`
+     (`git fetch`, `checkout`, `reset --hard`, `submodule update`).
+   - Optionally logs in to GHCR if images are private.
+   - Runs `docker compose pull` then `docker compose up -d --remove-orphans`.
+   - Health checks:
+     - `http://127.0.0.1:8000/api/tags/` (API)
+     - `http://127.0.0.1:8282/` (Web)
+
+### Triggers
+- **Automatic on push** to branch `feature-automation-workflow` **when files under these paths change**:
+  - `backend/**` → submodule pointer or files in the backend directory changed in this repo
+  - `frontend/**` → submodule pointer or files in the frontend directory changed in this repo
+  - `docker-compose.yml` → deployment uses new image tags or config
+  - `.github/workflows/**` → CI logic changed
+- **Manual**: Actions → **deployment** → **Run workflow** on branch `feature-automation-workflow`.
+
+### Image names used by Compose
+- `ghcr.io/e1pmis/conduit-backend:feature-automation-workflow`
+- `ghcr.io/e1pmis/conduit-frontend:feature-automation-workflow`
+
+### Required secrets (repo → Settings → Actions → Secrets)
+- `GHCR_USERNAME` = `e1pmis`
+- `GHCR_TOKEN` = PAT with `read:packages` if images are private (not needed for public)
+- `VM_HOST` = VM IP (e.g., `128.1.1.2`)
+- `VM_USER` = SSH user (e.g., `root`)
+- `VM_PORT` = `22`
+- `VM_SSH_KEY` = OpenSSH private key for the VM
+- `VM_DEPLOY_DIR` = repo path on the VM (e.g., `/home/root/conduit-container`)
 
 ---
 
