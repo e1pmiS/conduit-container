@@ -3,8 +3,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ feature-automation-workflow ]
-    paths:
-      - '**/*'
 
 permissions:
   contents: read
@@ -14,28 +12,27 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: SSH deploy (pull existing repo; update submodules)
+      - name: Preflight secrets
+        run: |
+          test -n "${{ secrets.VM_HOST }}" || { echo "VM_HOST missing"; exit 1; }
+          test -n "${{ secrets.VM_USER }}" || { echo "VM_USER missing"; exit 1; }
+          test -n "${{ secrets.SSH_KEY }}" || { echo "SSH_KEY missing"; exit 1; }
+
+      - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           port: ${{ secrets.VM_PORT }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
             DIR="${{ secrets.VM_DEPLOY_DIR }}"
             BR="feature-automation-workflow"
-
-            test -d "$DIR/.git" || { echo "Repo missing at $DIR"; exit 1; }
-
             git -C "$DIR" fetch --all --prune
             git -C "$DIR" checkout "$BR"
             git -C "$DIR" reset --hard "origin/$BR"
             git -C "$DIR" submodule sync --recursive
             git -C "$DIR" submodule update --init --recursive
-
             cd "$DIR"
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
-            docker compose pull || true
             docker compose up -d --build --remove-orphans
-            docker image prune -f || true
