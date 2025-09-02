@@ -1,7 +1,7 @@
 name: deployment
 on:
   push:
-    branches: [ feature-automation-workflow ]
+    branches: [ main ]
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -41,8 +41,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-backend:${{ github.sha }}
 
       - name: Build + push frontend
         uses: docker/build-push-action@v6
@@ -51,14 +51,25 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/conduit-frontend:${{ github.sha }}
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - uses: appleboy/ssh-action@v1.0.3
+      - name: Copy compose (and env) to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          port: ${{ secrets.VM_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.yml"   
+          target: ${{ secrets.VM_DEPLOY_DIR }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
@@ -67,16 +78,13 @@ jobs:
           script: |
             set -e
             DIR="${{ secrets.VM_DEPLOY_DIR }}"
-            BR="feature-automation-workflow"
-            git -C "$DIR" fetch --all --prune
-            git -C "$DIR" checkout "$BR"
-            git -C "$DIR" reset --hard origin/$BR
-            git -C "$DIR" submodule update --init --recursive
             cd "$DIR"
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin || true
-            docker compose pull
-            docker compose up -d --remove-orphans
-            sleep 30
+            echo "${{ secrets.GHCR_TOKEN }}" 
+            docker compose -f docker-compose.yml down --remove-orphans
+            docker container prune -f || true
+            docker image prune -f || true
+            docker compose -f docker-compose.yml pull
+            docker compose -f docker-compose.yml up -d --remove-orphans
             curl -sSf -m 10 http://127.0.0.1:8000/api/tags/ >/dev/null
             curl -sSf -I -m 10 http://127.0.0.1:8282/ >/dev/null
-            docker compose ps
+            docker compose -f docker-compose.yml ps
