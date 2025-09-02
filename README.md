@@ -192,25 +192,20 @@ A single **deployment** workflow builds images, publishes them to GHCR, then dep
 
 2) **Deploy**
    - SSH to the VM.
-   - Sync the worktree at `$VM_DEPLOY_DIR` to branch `feature-automation-workflow`
-     (`git fetch`, `checkout`, `reset --hard`, `submodule update`).
-   - Optionally logs in to GHCR if images are private.
+   - copies the docker-compose file to the VM.
+   - Clean up old containers on the VM.
    - Runs `docker compose pull` then `docker compose up -d --remove-orphans`.
    - Health checks:
      - `http://127.0.0.1:8000/api/tags/` (API)
      - `http://127.0.0.1:8282/` (Web)
 
 ### Triggers
-- **Automatic on push** to branch `feature-automation-workflow` **when files under these paths change**:
-  - `backend/**` → submodule pointer or files in the backend directory changed in this repo
-  - `frontend/**` → submodule pointer or files in the frontend directory changed in this repo
-  - `docker-compose.yml` → deployment uses new image tags or config
-  - `.github/workflows/**` → CI logic changed
-- **Manual**: Actions → **deployment** → **Run workflow** on branch `feature-automation-workflow`.
+- **Automatic on push** to branch `main` **when files under these 
+- **Manual**: Actions → **deployment** → **Run workflow** on branch `main`.
 
 ### Image names used by Compose
-- `ghcr.io/e1pmis/conduit-backend:feature-automation-workflow`
-- `ghcr.io/e1pmis/conduit-frontend:feature-automation-workflow`
+- `ghcr.io/e1pmis/conduit-backend:latest`
+- `ghcr.io/e1pmis/conduit-frontend:latest`
 
 ### Required secrets (repo → Settings → Actions → Secrets)
 - `GHCR_USERNAME` = `e1pmis`
