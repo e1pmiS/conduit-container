@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 
-      
+
       - name: Copy compose to VM
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -87,6 +87,7 @@ jobs:
             docker image prune -f || true
             docker compose -f docker-compose.yml pull
             docker compose -f docker-compose.yml up -d --remove-orphans
+            sleep 30 
             curl -sSf -m 10 http://127.0.0.1:8000/api/tags/ >/dev/null
             curl -sSf -I -m 10 http://127.0.0.1:8282/ >/dev/null
             docker compose -f docker-compose.yml ps
