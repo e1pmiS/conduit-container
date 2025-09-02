@@ -1,7 +1,7 @@
 name: deployment
 on:
   push:
-    branches: [ main ]
+    branches: [ feature-automation-workflow ]
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -58,7 +58,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Copy compose (and env) to VM
+      - name: Copy compose to VM
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VM_HOST }}
