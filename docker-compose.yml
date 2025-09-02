@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ghcr.io/e1pmis/conduit-backend:feature-automation-workflow
+    image: ghcr.io/e1pmis/conduit-backend:latest
     container_name: conduit-backend
     env_file: .env
     ports: ["8000:8000"]
@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/e1pmis/conduit-frontend:feature-automation-workflow
+    image: ghcr.io/e1pmis/conduit-frontend:latest
     container_name: conduit-frontend
     ports: ["8282:80"]
     depends_on: ["backend"]
