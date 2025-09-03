@@ -76,10 +76,7 @@ jobs:
             set -e
             DIR="${{ secrets.VM_DEPLOY_DIR }}"
             cd "$DIR"
-            echo "${{ secrets.GHCR_TOKEN }}" 
             docker compose -f docker-compose.yml down --remove-orphans
-            docker container prune -f || true
-            docker image prune -f || true
             docker compose -f docker-compose.yml pull
             docker compose -f docker-compose.yml up -d --remove-orphans
             sleep 30 
