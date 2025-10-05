@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conduit-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conduit-frontend
+  template:
+    metadata:
+      labels:
+        app: conduit-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/e1pmis/conduit-frontend:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: frontend-cache
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: frontend-cache
+          persistentVolumeClaim:
+            claimName: frontend-cache-pvc

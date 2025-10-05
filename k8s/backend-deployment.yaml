@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conduit-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: conduit-backend
+  template:
+    metadata:
+      labels:
+        app: conduit-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/e1pmis/conduit-backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: backend-env   
+          volumeMounts:
+            - name: dbdata
+              mountPath: /data
+      volumes:
+        - name: dbdata
+          persistentVolumeClaim:
+            claimName: dbdata-pvc
